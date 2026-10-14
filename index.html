@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="">
+<!--
+  极简单文件 Todo · A 暖纸白琥珀 · localStorage v1
+  替换占位 grep TODO 定位（5 处）
+  改主色 编辑 <style> 顶部 --accent / --paper / --ink-strong 3 变量
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf8f3">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0e0c">
+  <title>todos</title>
+  <meta name="description" content="一个双击就能用的极简 todo。零账号，零网络，零弹窗。数据存在你的浏览器里。">
+  <meta name="referrer" content="no-referrer">
+
+  <!-- 防闪烁 · 必须在 <style> 前同步执行 -->
+  <script>
+    (function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+  </script>
+
+  <style>
+    /* ============================================================
+     * Tokens · 沿用 mvp-intro A 方案 + todo 专属 3 状态色
+     * ========================================================== */
+    :root {
+      /* 用户可改 3 变量 */
+      --accent:       #a86b3c;
+      --paper:        #faf8f3;
+      --ink-strong:   #0f0e0c;
+
+      --ink-soft:     #2a2826;
+      --ink-muted:    #6b6b66;
+      --paper-soft:   #f3efe6;
+      --rule:         #e6e3d8;
+      --accent-soft:  #f0d9c2;
+      --accent-hover: #8d5731;
+      --state-danger: #b04a3f;
+      --state-success:#5a7a4f;
+
+      --surface-page:        var(--paper);
+      --surface-row-hover:   var(--paper-soft);
+      --surface-row-active:  var(--accent-soft);
+      --text-primary:        var(--ink-strong);
+      --text-secondary:      var(--ink-soft);
+      --text-muted:          var(--ink-muted);
+      --border-input-focus:  var(--accent);
+
+      --font-sans: -apple-system,BlinkMacSystemFont,"Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans CN",sans-serif;
+      --font-mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+      --fs-12:12px; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-20:20px; --fs-24:24px;
+      --fs-list:15px; --fs-input:16px;
+      --fw-regular:400; --fw-medium:510;
+      --letter-display:-0.02em; --letter-body:0; --letter-tracked:.08em;
+
+      --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px; --s-10:40px; --s-12:48px;
+      --r-sm:4px; --r-md:6px; --r-lg:8px; --r-pill:999px;
+      --elev-1:0 1px 0 rgba(15,14,12,.04);
+      --elev-2:0 4px 12px rgba(15,14,12,.08);
+
+      --dur-instant:80ms; --dur-quick:150ms; --dur-base:240ms; --dur-screen:360ms;
+      --ease-out:cubic-bezier(.2,.8,.2,1);
+      --ease-spring:cubic-bezier(.34,1.56,.64,1);
+
+      --max-w:720px;
+      --row-h:44px; --row-h-edit:48px; --input-h:44px; --filter-h:36px;
+      --section-gap:48px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --ink-strong:#f4ede1; --ink-soft:#d9d3c5; --ink-muted:#8a8579;
+        --paper:#0f0e0c; --paper-soft:#1a1816; --rule:#2a2826;
+        --accent:#d4895a; --accent-soft:#3a261c; --accent-hover:#e29c70;
+        --state-danger:#d68a7f; --state-success:#8aa87a;
+      }
+    }
+    [data-theme="dark"] {
+      --ink-strong:#f4ede1; --ink-soft:#d9d3c5; --ink-muted:#8a8579;
+      --paper:#0f0e0c; --paper-soft:#1a1816; --rule:#2a2826;
+      --accent:#d4895a; --accent-soft:#3a261c; --accent-hover:#e29c70;
+      --state-danger:#d68a7f; --state-success:#8aa87a;
+    }
+    [data-theme="light"] {
+      --ink-strong:#0f0e0c; --ink-soft:#2a2826; --ink-muted:#6b6b66;
+      --paper:#faf8f3; --paper-soft:#f3efe6; --rule:#e6e3d8;
+      --accent:#a86b3c; --accent-soft:#f0d9c2; --accent-hover:#8d5731;
+    }
+
+    /* ============================================================
+     * Reset & base
+     * ========================================================== */
+    *,*::before,*::after { box-sizing:border-box; }
+    html { -webkit-text-size-adjust:100%; }
+    body {
+      margin:0; background:var(--paper); color:var(--ink-strong);
+      font-family:var(--font-sans); font-size:var(--fs-16); line-height:1.5;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      word-wrap:break-word; overflow-wrap:break-word;
+      transition:background-color var(--dur-screen) var(--ease-out),color var(--dur-screen) var(--ease-out);
+    }
+    :focus { outline:none; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm); }
+    button { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+    input { font:inherit; color:inherit; }
+    ul { list-style:none; padding:0; margin:0; }
+
+    .skip-link {
+      position:absolute; top:-100px; left:0; padding:var(--s-3) var(--s-4);
+      background:var(--accent); color:var(--paper); font-size:var(--fs-14);
+      text-decoration:none; border-radius:0 0 var(--r-md) 0; z-index:100;
+      transition:top var(--dur-quick) var(--ease-out);
+    }
+    .skip-link:focus { top:0; }
+
+    .page { max-width:var(--max-w); margin:0 auto; padding:0 var(--s-6) calc(var(--section-gap) * 2); }
+
+    /* ============================================================
+     * Theme toggle
+     * ========================================================== */
+    .theme-toggle {
+      position:fixed; top:var(--s-6); right:var(--s-6);
+      width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center;
+      background:transparent; border:1px solid var(--rule); border-radius:var(--r-md);
+      color:var(--ink-strong); z-index:50;
+      transition:background-color var(--dur-instant) var(--ease-out),border-color var(--dur-instant) var(--ease-out);
+    }
+    .theme-toggle:hover { background:var(--paper-soft); border-color:var(--ink-muted); }
+    .theme-toggle svg { width:18px; height:18px; transition:transform var(--dur-quick) var(--ease-out); }
+    .theme-toggle:hover svg { transform:rotate(15deg); }
+    .theme-toggle [data-icon-moon] { display:none; }
+    [data-theme="dark"] .theme-toggle [data-icon-sun] { display:none; }
+    [data-theme="dark"] .theme-toggle [data-icon-moon] { display:block; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .theme-toggle [data-icon-sun] { display:none; }
+      :root:not([data-theme="light"]) .theme-toggle [data-icon-moon] { display:block; }
+    }
+
+    /* ============================================================
+     * Error banner（localStorage 不可用 / quota 满 / parse 失败）
+     * ========================================================== */
+    .error-banner {
+      display:flex; align-items:center; gap:var(--s-3);
+      padding:var(--s-3) var(--s-6);
+      background:var(--paper-soft); border-bottom:1px solid var(--state-danger);
+      color:var(--state-danger); font-size:var(--fs-14);
+    }
+    .error-banner svg { width:16px; height:16px; flex:0 0 16px; }
+
+    /* ============================================================
+     * Header
+     * ========================================================== */
+    header { padding:var(--s-12) 0 var(--s-6); display:flex; align-items:baseline; justify-content:space-between; gap:var(--s-4); }
+    header h1 { font-size:var(--fs-24); font-weight:var(--fw-medium); letter-spacing:var(--letter-display); margin:0; }
+    .count { font-family:var(--font-mono); font-size:var(--fs-12); color:var(--ink-muted); letter-spacing:var(--letter-tracked); text-transform:uppercase; }
+
+    /* ============================================================
+     * Add form
+     * ========================================================== */
+    #add-form {
+      display:flex; gap:var(--s-2); margin-bottom:var(--s-6);
+      position:sticky; top:0; z-index:10; background:var(--paper); padding:var(--s-3) 0;
+    }
+    #new-todo {
+      flex:1; height:var(--input-h); padding:0 var(--s-4);
+      background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-md);
+      font-size:var(--fs-input); color:var(--ink-strong);
+      transition:border-color var(--dur-instant) var(--ease-out);
+    }
+    #new-todo::placeholder { color:var(--ink-muted); }
+    #new-todo:focus { border-color:var(--border-input-focus); }
+    #new-todo.shake { animation:shake .4s; border-color:var(--state-danger); }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+    #add-form button {
+      width:var(--input-h); height:var(--input-h); flex:0 0 var(--input-h);
+      display:inline-flex; align-items:center; justify-content:center;
+      background:var(--accent); color:var(--paper); border-radius:var(--r-md);
+      transition:background-color var(--dur-instant) var(--ease-out),transform var(--dur-instant) var(--ease-out);
+    }
+    #add-form button:hover { background:var(--accent-hover); }
+    #add-form button:active { transform:scale(.96); }
+    #add-form button svg { width:18px; height:18px; }
+
+    /* ============================================================
+     * Toolbar · filter tabs
+     * ========================================================== */
+    .toolbar { display:flex; align-items:center; gap:var(--s-4); margin-bottom:var(--s-4); flex-wrap:wrap; }
+    .filter-tabs { display:flex; gap:var(--s-2); }
+    .filter-tabs button {
+      height:var(--filter-h); padding:0 var(--s-3); border-radius:var(--r-pill);
+      color:var(--ink-muted); font-size:var(--fs-14);
+      transition:color var(--dur-instant) var(--ease-out),background-color var(--dur-instant) var(--ease-out);
+    }
+    .filter-tabs button:hover { color:var(--ink-strong); }
+    .filter-tabs button.active { color:var(--paper); background:var(--accent); }
+    .filter-tabs button span { font-family:var(--font-mono); font-size:var(--fs-12); margin-left:var(--s-1); opacity:.85; }
+    .tag-filter { display:flex; gap:var(--s-2); flex-wrap:wrap; }
+    .tag-chip {
+      height:var(--filter-h); padding:0 var(--s-3); border-radius:var(--r-pill);
+      background:var(--paper-soft); color:var(--ink-soft); font-size:var(--fs-12);
+      transition:background-color var(--dur-instant) var(--ease-out),color var(--dur-instant) var(--ease-out);
+    }
+    .tag-chip:hover { background:var(--accent-soft); }
+    .tag-chip.active { background:var(--accent); color:var(--paper); }
+
+    /* ============================================================
+     * Todo list
+     * ========================================================== */
+    #todo-list { display:flex; flex-direction:column; }
+    .todo-item {
+      display:flex; align-items:center; gap:var(--s-3);
+      min-height:var(--row-h); padding:var(--s-2) var(--s-2);
+      border-bottom:1px solid var(--rule);
+      transition:background-color var(--dur-instant) var(--ease-out);
+    }
+    .todo-item:hover { background:var(--surface-row-hover); }
+    .todo-item.checked .title { opacity:.6; text-decoration:line-through; color:var(--ink-muted); }
+    .todo-item.checked .checkbox { background:var(--accent); color:var(--paper); border-color:var(--accent); }
+    .todo-item.editing { background:var(--paper-soft); }
+    .todo-item.active { background:var(--surface-row-active); }
+    .todo-item[data-drag] { opacity:.7; transform:scale(.99); box-shadow:var(--elev-2); }
+    .checkbox {
+      flex:0 0 20px; width:20px; height:20px; border-radius:var(--r-pill);
+      border:1.5px solid var(--ink-muted); display:inline-flex; align-items:center; justify-content:center;
+      color:var(--accent); transition:border-color var(--dur-instant) var(--ease-out),background-color var(--dur-instant) var(--ease-out);
+    }
+    .checkbox:hover { border-color:var(--accent); }
+    .checkbox svg { width:14px; height:14px; }
+    .title {
+      flex:1; font-size:var(--fs-list); color:var(--ink-strong);
+      overflow-wrap:anywhere; cursor:text;
+    }
+    .tags { display:flex; gap:var(--s-1); flex-wrap:wrap; }
+    .tag-inline {
+      font-family:var(--font-mono); font-size:var(--fs-12); color:var(--ink-muted);
+      padding:2px var(--s-2); background:var(--paper-soft); border-radius:var(--r-sm);
+    }
+    .actions { display:flex; gap:var(--s-1); opacity:0; transition:opacity var(--dur-instant) var(--ease-out); }
+    .todo-item:hover .actions, .todo-item:focus-within .actions, .todo-item.active .actions { opacity:1; }
+    .actions button {
+      width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center;
+      border-radius:var(--r-sm); color:var(--ink-muted);
+      transition:color var(--dur-instant) var(--ease-out),background-color var(--dur-instant) var(--ease-out);
+    }
+    .actions button:hover { color:var(--ink-strong); background:var(--paper-soft); }
+    .actions .del:hover { color:var(--state-danger); }
+    .actions svg { width:14px; height:14px; }
+
+    /* Edit mode */
+    .edit-input {
+      flex:1; height:var(--row-h-edit); padding:0 var(--s-3);
+      background:var(--paper); border:1px solid var(--border-input-focus); border-radius:var(--r-md);
+      font-size:var(--fs-input); color:var(--ink-strong);
+    }
+    .edit-actions { display:flex; gap:var(--s-2); }
+    .edit-actions button {
+      width:var(--row-h-edit); height:var(--row-h-edit); display:inline-flex; align-items:center; justify-content:center;
+      border-radius:var(--r-md); color:var(--ink-soft);
+      transition:color var(--dur-instant) var(--ease-out),background-color var(--dur-instant) var(--ease-out);
+    }
+    .edit-actions button:hover { background:var(--paper); }
+    .edit-actions .save { color:var(--state-success); }
+    .edit-actions .cancel { color:var(--state-danger); }
+    .edit-actions svg { width:16px; height:16px; }
+
+    /* Empty / no-match */
+    .empty {
+      display:flex; flex-direction:column; align-items:center; gap:var(--s-3);
+      padding:var(--s-12) var(--s-4); color:var(--ink-muted); text-align:center;
+    }
+    .empty .inbox-icon { width:48px; height:48px; opacity:.4; }
+    .empty p { margin:0; font-size:var(--fs-14); }
+
+    /* ============================================================
+     * Undo bar
+     * ========================================================== */
+    .undo-bar {
+      position:fixed; left:50%; bottom:var(--s-6); transform:translateX(-50%);
+      display:flex; align-items:center; gap:var(--s-3);
+      padding:var(--s-3) var(--s-4);
+      background:var(--ink-strong); color:var(--paper);
+      border-radius:var(--r-md); font-size:var(--fs-14);
+      box-shadow:var(--elev-2);
+      animation:slide-up var(--dur-base) var(--ease-spring);
+      z-index:30;
+    }
+    .undo-bar .undo { color:var(--accent-soft); font-weight:var(--fw-medium); }
+    .undo-bar .undo:hover { color:var(--paper); text-decoration:underline; }
+    @keyframes slide-up { from { transform:translate(-50%,100%); opacity:0; } to { transform:translate(-50%,0); opacity:1; } }
+
+    /* ============================================================
+     * Quota meter
+     * ========================================================== */
+    .quota-meter {
+      margin-top:var(--s-4); padding:var(--s-3) var(--s-4);
+      background:var(--paper-soft); border-left:3px solid var(--state-warning);
+      color:var(--ink-soft); font-size:var(--fs-14);
+    }
+
+    /* ============================================================
+     * Footer
+     * ========================================================== */
+    footer {
+      border-top:1px solid var(--rule); padding:var(--s-8) 0;
+      text-align:center; font-size:var(--fs-12); color:var(--ink-muted);
+    }
+    footer p { margin:0; }
+
+    /* ============================================================
+     * Reduced motion
+     * ========================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      *,*::before,*::after {
+        animation-duration:.01ms !important; animation-iteration-count:1 !important;
+        transition-duration:.01ms !important;
+      }
+    }
+
+    /* ============================================================
+     * Mobile (single breakpoint 720px)
+     * ========================================================== */
+    @media (max-width: 720px) {
+      :root { --row-h:52px; --row-h-edit:56px; --input-h:48px; --section-gap:32px; --fs-24:20px; }
+      .theme-toggle { top:var(--s-4); right:var(--s-4); }
+      header { padding:var(--s-10) 0 var(--s-4); flex-direction:column; align-items:flex-start; gap:var(--s-1); }
+      .actions { opacity:1; } /* touch devices: always show */
+    }
+  </style>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换明暗主题" title="切换明暗主题">
+    <svg data-icon-sun aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    <svg data-icon-moon aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+
+  <noscript><p class="error-banner">本应用需要 JavaScript。请在浏览器设置中启用。</p></noscript>
+
+  <main id="main" class="page">
+
+    <header>
+      <h1>todos</h1>
+      <div class="count" id="count" aria-live="polite"></div>
+    </header>
+
+    <form id="add-form" autocomplete="off">
+      <label for="new-todo" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">新 todo</label>
+      <input id="new-todo" name="new-todo" type="text" maxlength="500" placeholder="回车新增" aria-label="新 todo 标题（#标签 用空格分隔）">
+      <button type="submit" aria-label="添加">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </form>
+
+    <div class="toolbar">
+      <div class="filter-tabs" role="tablist" aria-label="筛选">
+        <button type="button" data-filter="all" class="active" role="tab" aria-selected="true">全部 <span data-c="all">0</span></button>
+        <button type="button" data-filter="active" role="tab" aria-selected="false">待办 <span data-c="active">0</span></button>
+        <button type="button" data-filter="done" role="tab" aria-selected="false">已完成 <span data-c="done">0</span></button>
+      </div>
+      <div class="tag-filter" id="tag-filter" aria-label="按标签筛选"></div>
+    </div>
+
+    <ul id="todo-list" aria-live="polite"></ul>
+
+    <div class="quota-meter" id="quota-meter" hidden role="status" aria-live="polite"></div>
+
+  </main>
+
+  <footer>
+    <p>© 2026 · 数据存在你浏览器，刷新不丢 · <button type="button" id="export-btn" style="font-size:inherit;color:var(--ink-soft);border-bottom:1px dashed var(--rule);">导出 JSON</button></p>
+  </footer>
+
+  <div class="undo-bar" id="undo-bar" hidden role="status" aria-live="polite"></div>
+
+  <script>
+  (function(){
+    'use strict';
+    const K='mvp-todo:v1', CK='mvp-todo:v1:corrupted:', QB=5*1024*1024, UD=3000, MAX_TAG=20;
+    const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+    const list=$('#todo-list'), form=$('#add-form'), newTodo=$('#new-todo'),
+          tagFilter=$('#tag-filter'), undoBar=$('#undo-bar'),
+          quotaMeter=$('#quota-meter'), countEl=$('#count'),
+          exportBtn=$('#export-btn');
+
+    let S={items:[], filter:'all', activeTag:null, search:'', editingId:null,
+           deletedSnapshot:null, undoTimer:null, error:null, available:true, lastActiveId:null};
+
+    /* ===== helpers ===== */
+    const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const gid=()=>(crypto&&crypto.randomUUID&&crypto.randomUUID())||`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const now=()=>Date.now();
+    const trim=s=>typeof s==='string'?s.trim():'';
+    const valItem=r=>({
+      id: typeof r?.id==='string'?r.id:gid(),
+      title: trim(r?.title).slice(0,500),
+      done: !!r?.done,
+      tags: Array.isArray(r?.tags)?[...new Set(r.tags.filter(t=>typeof t==='string'&&t&&t.length<=MAX_TAG).map(t=>t.toLowerCase()))].slice(0,10):[],
+      createdAt: Number.isFinite(r?.createdAt)?r.createdAt:now(),
+      updatedAt: Number.isFinite(r?.updatedAt)?r.updatedAt:now(),
+      completedAt: Number.isFinite(r?.completedAt)?r.completedAt:null
+    });
+    const parseTags=t=>{const m=String(t||'').match(/#[\p{L}\p{N}_-]+/gu)||[];return [...new Set(m.map(x=>x.slice(1).toLowerCase()).filter(x=>x&&x.length<=MAX_TAG))].slice(0,10);};
+    const cleanTitle=t=>String(t||'').replace(/#[\p{L}\p{N}_-]+/gu,'').replace(/\s+/g,' ').trim().slice(0,500);
+
+    /* ===== persistence ===== */
+    function checkAvailable(){
+      try{const k='__t'+now();localStorage.setItem(k,'1');localStorage.removeItem(k);return true;}
+      catch(e){return false;}
+    }
+    function setError(err){
+      S.error=err;
+      let b=document.getElementById('error-banner');
+      if(!err){if(b)b.remove();return;}
+      if(!b){b=document.createElement('div');b.id='error-banner';b.className='error-banner';b.setAttribute('role','alert');
+        b.innerHTML='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span></span>';
+        document.body.insertBefore(b, document.body.firstChild);}
+      b.querySelector('span').textContent=err.message;
+    }
+    function save(){
+      if(!S.available)return;
+      try{
+        localStorage.setItem(K, JSON.stringify({version:1, items:S.items, settings:{filter:S.filter}}));
+        checkQuota();
+      }catch(e){
+        if(e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014))
+          setError({code:'quota', message:'本地存储已满（5 MB），请删除一些旧 todo 或导出 JSON 备份。'});
+        else setError({code:'unknown', message:'存储失败：'+(e?.message||'未知错误')});
+      }
+    }
+    function load(){
+      try{
+        const raw=localStorage.getItem(K); if(!raw)return null;
+        const d=JSON.parse(raw);
+        if(!d||!Array.isArray(d.items))throw new Error('schema');
+        return {
+          items: d.items.map(valItem).filter(i=>i.title),
+          filter: ['all','active','done'].includes(d.settings?.filter)?d.settings.filter:'all'
+        };
+      }catch(e){
+        try{const raw=localStorage.getItem(K);if(raw)localStorage.setItem(CK+now(),raw);}catch(_){}
+        setError({code:'parse', message:'本地数据格式不匹配，已重置并备份原始数据到 '+CK+now()});
+        return null;
+      }
+    }
+    function checkQuota(){
+      if(!S.available)return;
+      let u=0; try{u=new Blob([JSON.stringify({version:1,items:S.items})]).size;}catch(_){}
+      const pct=Math.round(u/QB*100);
+      if(u>=QB){
+        quotaMeter.hidden=false; quotaMeter.textContent=`本地存储已满（${(u/1024/1024).toFixed(1)} / 5 MB），请归档或清除旧 todo`;
+      }else if(pct>=80){
+        quotaMeter.hidden=false; quotaMeter.textContent=`本地存储已用 ${pct}%（${(u/1024/1024).toFixed(1)} / 5 MB），建议归档旧 todo`;
+      }else quotaMeter.hidden=true;
+    }
+
+    /* ===== mutations ===== */
+    function addItem(raw){
+      if(!S.available||(S.error&&S.error.code==='quota'))return;
+      const title=cleanTitle(raw);
+      if(!title){newTodo.classList.remove('shake');void newTodo.offsetWidth;newTodo.classList.add('shake');return;}
+      const item=valItem({id:gid(), title, done:false, tags:parseTags(raw), createdAt:now(), updatedAt:now(), completedAt:null});
+      S.items.unshift(item); S.lastActiveId=item.id; save(); render();
+    }
+    function toggleDone(id){
+      const it=S.items.find(i=>i.id===id); if(!it)return;
+      it.done=!it.done; it.completedAt=it.done?now():null; it.updatedAt=now();
+      save(); render();
+    }
+    function deleteItem(id){
+      const idx=S.items.findIndex(i=>i.id===id); if(idx<0)return;
+      S.deletedSnapshot={item:{...S.items[idx]}, index:idx};
+      S.items.splice(idx,1); save(); render(); showUndo();
+    }
+    function undoDelete(){
+      if(!S.deletedSnapshot)return;
+      const{item,index}=S.deletedSnapshot;
+      S.items.splice(Math.min(index,S.items.length),0,item);
+      S.deletedSnapshot=null; if(S.undoTimer){clearTimeout(S.undoTimer);S.undoTimer=null;}
+      undoBar.hidden=true; save(); render();
+    }
+    function startEdit(id){S.editingId=id; render();}
+    function saveEdit(id, raw){
+      const it=S.items.find(i=>i.id===id); if(!it){S.editingId=null;render();return;}
+      const title=cleanTitle(raw);
+      if(title){it.title=title; it.tags=parseTags(raw); it.updatedAt=now(); save();}
+      S.editingId=null; render();
+    }
+    function cancelEdit(){S.editingId=null; render();}
+    function setFilter(f){S.filter=f; S.activeTag=null; save(); render();}
+    function setActiveTag(t){S.activeTag=S.activeTag===t?null:t; render();}
+    function setLastActive(id){S.lastActiveId=id;}
+
+    /* ===== render ===== */
+    function filtered(){
+      const term=S.search.trim().toLowerCase();
+      return S.items.filter(i=>{
+        if(S.filter==='active'&&i.done)return false;
+        if(S.filter==='done'&&!i.done)return false;
+        if(S.activeTag&&!i.tags.includes(S.activeTag))return false;
+        return true;
+      });
+    }
+    function allTags(){const s=new Set();S.items.forEach(i=>i.tags.forEach(t=>s.add(t)));return [...s].sort();}
+    function icon(name,cls){
+      const a=cls?'class="'+cls+'"':'';
+      const p='viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+      if(name==='check')return `<svg ${a} ${p}><polyline points="20 6 9 17 4 12"/></svg>`;
+      if(name==='pencil')return `<svg ${a} ${p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>`;
+      if(name==='trash')return `<svg ${a} ${p}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
+      if(name==='x')return `<svg ${a} ${p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      if(name==='inbox')return `<svg ${a} ${p}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`;
+      return '';
+    }
+    function render(){
+      // filter tabs
+      $$('.filter-tabs button').forEach(b=>{
+        const on=b.dataset.filter===S.filter;
+        b.classList.toggle('active',on);
+        b.setAttribute('aria-selected',on?'true':'false');
+      });
+      // counts
+      const all=S.items.length, active=S.items.filter(i=>!i.done).length, done=all-active;
+      document.querySelector('[data-c="all"]').textContent=all;
+      document.querySelector('[data-c="active"]').textContent=active;
+      document.querySelector('[data-c="done"]').textContent=done;
+      countEl.textContent = all===0 ? '' : `${active} 项待办 · ${done} 项已完成`;
+      // tag chips
+      const tags=allTags();
+      tagFilter.innerHTML = tags.map(t=>
+        `<button type="button" class="tag-chip ${S.activeTag===t?'active':''}" data-tag="${esc(t)}">#${esc(t)}</button>`
+      ).join('');
+      // list
+      const items=filtered();
+      if(S.items.length===0){
+        list.innerHTML = `<li class="empty">${icon('inbox','inbox-icon')}<p>还没有 todo。在上方输入框里写下第一件事。</p></li>`;
+      }else if(items.length===0){
+        list.innerHTML = `<li class="empty"><p>没有匹配的 todo</p></li>`;
+      }else{
+        list.innerHTML = items.map(renderItem).join('');
+      }
+      // focus edit input
+      if(S.editingId){
+        const inp=document.querySelector(`[data-edit-id="${S.editingId}"]`);
+        if(inp){inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);}
+      }
+    }
+    function renderItem(it){
+      const editing=S.editingId===it.id, checked=it.done, active=S.lastActiveId===it.id;
+      const cls=`todo-item ${checked?'checked':''} ${editing?'editing':''} ${active?'active':''}`.trim();
+      const tags=it.tags.map(t=>`<span class="tag-inline">#${esc(t)}</span>`).join('');
+      if(editing){
+        return `<li class="${cls}" data-id="${esc(it.id)}">
+          <button type="button" class="checkbox" aria-label="切换完成" tabindex="-1">${checked?icon('check'):''}</button>
+          <input class="edit-input" data-edit-id="${esc(it.id)}" value="${esc(it.title)}" maxlength="500" aria-label="编辑 todo">
+          <div class="edit-actions">
+            <button type="button" class="save" aria-label="保存">${icon('check')}</button>
+            <button type="button" class="cancel" aria-label="取消">${icon('x')}</button>
+          </div>
+        </li>`;
+      }
+      return `<li class="${cls}" data-id="${esc(it.id)}" tabindex="0" role="listitem">
+        <button type="button" class="checkbox" role="checkbox" aria-checked="${checked}" aria-label="切换完成">${checked?icon('check'):''}</button>
+        <span class="title" title="双击编辑">${esc(it.title)}</span>
+        <span class="tags">${tags}</span>
+        <div class="actions">
+          <button type="button" class="edit" aria-label="编辑">${icon('pencil')}</button>
+          <button type="button" class="del" aria-label="删除">${icon('trash')}</button>
+        </div>
+      </li>`;
+    }
+
+    function showUndo(){
+      if(S.undoTimer)clearTimeout(S.undoTimer);
+      undoBar.hidden=false;
+      undoBar.innerHTML='';
+      const span=document.createElement('span'); span.textContent='已删除 1 项';
+      const btn=document.createElement('button'); btn.type='button'; btn.className='undo'; btn.textContent='撤销';
+      btn.addEventListener('click', undoDelete);
+      undoBar.append(span, document.createTextNode(' · '), btn);
+      S.undoTimer=setTimeout(()=>{S.deletedSnapshot=null;S.undoTimer=null;undoBar.hidden=true;}, UD);
+    }
+
+    /* ===== bind events ===== */
+    function bind(){
+      form.addEventListener('submit', e=>{
+        e.preventDefault();
+        const v=newTodo.value;
+        if(v.trim()){addItem(v); newTodo.value='';}
+        else addItem('');
+      });
+      newTodo.addEventListener('keydown', e=>{if(e.key==='Escape')newTodo.value='';});
+      // filter tabs
+      $$('.filter-tabs button').forEach(b=>b.addEventListener('click', ()=>setFilter(b.dataset.filter)));
+      // tag chips (delegated)
+      tagFilter.addEventListener('click', e=>{const c=e.target.closest('.tag-chip'); if(c)setActiveTag(c.dataset.tag);});
+      // list delegated events
+      list.addEventListener('click', e=>{
+        const li=e.target.closest('.todo-item'); if(!li)return;
+        const id=li.dataset.id;
+        if(e.target.closest('.checkbox')){setLastActive(id);toggleDone(id);return;}
+        if(e.target.closest('.del')){setLastActive(id);deleteItem(id);return;}
+        if(e.target.closest('.edit')){setLastActive(id);startEdit(id);return;}
+        if(e.target.closest('.save')){const inp=li.querySelector('.edit-input'); if(inp)saveEdit(id,inp.value);return;}
+        if(e.target.closest('.cancel')){cancelEdit();return;}
+      });
+      list.addEventListener('dblclick', e=>{
+        const li=e.target.closest('.todo-item');
+        if(!li||li.classList.contains('editing'))return;
+        if(e.target.closest('button,input'))return;
+        if(e.target.closest('.title'))startEdit(li.dataset.id);
+      });
+      // set last active on focus
+      list.addEventListener('focusin', e=>{
+        const li=e.target.closest('.todo-item'); if(li)setLastActive(li.dataset.id);
+      });
+      // edit input keyboard
+      list.addEventListener('keydown', e=>{
+        const inp=e.target.closest('.edit-input');
+        if(inp){
+          const id=inp.dataset.editId;
+          if(e.key==='Enter'){e.preventDefault();saveEdit(id,inp.value);}
+          else if(e.key==='Escape'){e.preventDefault();cancelEdit();}
+          return;
+        }
+        // global shortcuts (when not in input)
+        if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+        if(e.key==='1')setFilter('all');
+        else if(e.key==='2')setFilter('active');
+        else if(e.key==='3')setFilter('done');
+        else if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){e.preventDefault();undoDelete();}
+        else if(e.key==='e'||e.key==='E'){
+          const id=S.lastActiveId||(filtered()[0]?.id); if(id)startEdit(id);
+        }
+        else if(e.key==='Delete'||e.key==='Backspace'){
+          const id=S.lastActiveId||(filtered()[0]?.id); if(id){e.preventDefault();deleteItem(id);}
+        }
+        else if(e.key==='/'){e.preventDefault();newTodo.focus();}
+        else if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+          e.preventDefault();
+          const items=[...document.querySelectorAll('#todo-list .todo-item')];
+          if(!items.length)return;
+          const i=items.indexOf(document.activeElement);
+          const ni=e.key==='ArrowUp'?(i<0?items.length-1:Math.max(0,i-1)):(i<0?0:Math.min(items.length-1,i+1));
+          items[ni].focus();
+        }
+      });
+      // ctrl+enter on focused item
+      list.addEventListener('keydown', e=>{
+        if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
+          const li=e.target.closest('.todo-item');
+          if(li){e.preventDefault();setLastActive(li.dataset.id);toggleDone(li.dataset.id);}
+        }
+      });
+      // multi-tab sync
+      window.addEventListener('storage', e=>{
+        if(e.key===K){
+          const d=load(); if(d){S.items=d.items; S.filter=d.filter; render();}
+        }
+      });
+      // theme toggle
+      document.querySelector('[data-theme-toggle]')?.addEventListener('click', ()=>{
+        const cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+        const next=cur==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try{localStorage.setItem('theme', next);}catch(_){}
+      });
+      // export
+      exportBtn.addEventListener('click', ()=>{
+        const data=JSON.stringify({version:1, items:S.items}, null, 2);
+        try{
+          navigator.clipboard?.writeText(data);
+          exportBtn.textContent='已复制到剪贴板';
+          setTimeout(()=>exportBtn.textContent='导出 JSON', 1500);
+        }catch(_){
+          const w=window.open('','_blank');
+          if(w){w.document.write('<pre>'+esc(data)+'</pre>');w.document.close();}
+        }
+      });
+    }
+
+    /* ===== init ===== */
+    function init(){
+      S.available=checkAvailable();
+      if(!S.available)setError({code:'unavailable', message:'浏览器禁用了本地存储，todo 不会保存。建议用普通窗口打开。'});
+      else{const d=load(); if(d){S.items=d.items; S.filter=d.filter;}}
+      render(); bind(); checkQuota();
+    }
+    init();
+  })();
+  </script>
+</body>
+</html>
